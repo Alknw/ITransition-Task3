@@ -1,18 +1,24 @@
 import { Dice } from './Dice.js';
 
 export class DiceParser {
-  static parse(inputArgs) {
-    if (inputArgs.length < 3) {
-      throw new Error('Please provide at least 3 dice.');
+  static parse(input) {
+    const diceStrings = typeof input === 'string' ? input.trim().split(/\s+/) : input;
+
+    if (diceStrings.length < 3) {
+      throw new Error('At least 3 dice are required.');
     }
 
-    const diceList = inputArgs.map((arg, i) => {
-      const faces = arg.split(',').map(n => {
-        const parsed = parseInt(n, 10);
-        if (isNaN(parsed)) {
-          throw new Error(`Dice ${i + 1} contains non-integer values.`);
+    if (diceStrings.length > 9) {
+      throw new Error('Too many dice (maximum is 9).');
+    }
+
+    const diceList = diceStrings.map((s, i) => {
+      const faces = s.split(',').map(n => {
+        const num = parseInt(n.trim(), 10);
+        if (isNaN(num)) {
+          throw new Error(`Non-integer value detected in dice ${i + 1}: "${n}"`);
         }
-        return parsed;
+        return num;
       });
 
       if (faces.length !== 6) {
