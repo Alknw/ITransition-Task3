@@ -1,12 +1,22 @@
 import crypto from 'crypto';
 
 export class FairRandomGenerator {
-  static generate(seed1, seed2, max) {
-    const combined = crypto
-      .createHash('sha256')
-      .update(seed1 + seed2)
-      .digest('hex');
-    const number = parseInt(combined.slice(0, 8), 16);
-    return number % max;
+  static commit(max) {
+    const value = crypto.randomInt(max);
+    const secret = crypto.randomBytes(32).toString('hex');
+    const hmac = crypto.createHmac('sha256', secret)
+                       .update(value.toString())
+                       .digest('hex');
+    return { value, secret, hmac };
+  }
+
+  static verify(hmac, value, secret) {
+    return hmac === crypto.createHmac('sha256', secret)
+                          .update(value.toString())
+                          .digest('hex');
+  }
+
+  static mix(user, computer, max) {
+    return (user + computer) % max;
   }
 }

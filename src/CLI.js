@@ -9,17 +9,19 @@ export class CLI {
     });
   }
 
-  question(query) {
-    return new Promise(resolve => this.rl.question(query, resolve));
+  printWelcome() {
+    console.log(chalk.green('\n🎲 Welcome to the Fair Dice Game!\n'));
   }
 
-  showMenu(diceCount) {
-    console.log(chalk.blue('\nChoose your dice:'));
-    for (let i = 0; i < diceCount; i++) {
-      console.log(`${i + 1}. Dice #${i + 1}`);
-    }
-    console.log(`${diceCount + 1}. Help`);
-    console.log(`${diceCount + 2}. Exit`);
+  showDiceOptions(diceList) {
+    console.log(chalk.blue('Available Dice Options:'));
+    diceList.forEach((dice, index) => {
+      console.log(`  ${index + 1}. [${dice.faces.join(', ')}]`);
+    });
+  }
+
+  prompt(question) {
+    return new Promise(resolve => this.rl.question(question, resolve));
   }
 
   printHelp(table) {

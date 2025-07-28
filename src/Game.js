@@ -1,74 +1,69 @@
-import { CLI } from './CLI.js';
-import { HMACGenerator } from './HMACGenerator.js';
-import { ProbabilityTable } from './ProbabilityTable.js';
 import { FairRandomGenerator } from './FairRandomGenerator.js';
+import { ProbabilityTable } from './ProbabilityTable.js';
 
 export class Game {
-  constructor(diceList) {
+  constructor(diceList, cli) {
     this.diceList = diceList;
-    this.cli = new CLI();
+    this.cli = cli;
   }
 
   async run() {
-    console.log('\n--- Fair Coin Toss ---');
-    const secretKey = HMACGenerator.generateKey();
-    const coin = HMACGenerator.getFairBit(secretKey);
-    console.log('HMAC:', coin.hmac);
-    const userBit = await this.cli.question('Enter your guess (0 or 1): ');
+    this.cli.printWelcome();
+    this.cli.showDiceOptions(this.diceList);
 
-    const userGoesFirst = userBit === coin.bit;
-    console.log('Secret key:', secretKey);
-    console.log(`Computer's bit: ${coin.bit}`);
-    console.log(userGoesFirst ? 'You go first!' : 'Computer goes first.');
-
-    let userDice, computerDice;
+    let userIndex;
     while (true) {
-      this.cli.showMenu(this.diceList.length);
-      const choice = await this.cli.question('\nEnter your choice: ');
-      const index = parseInt(choice, 10) - 1;
-
-      if (index < 0 || index >= this.diceList.length + 2 || isNaN(index)) {
-        console.log('Invalid choice.');
+      const input = await this.cli.prompt(`Select your die (1-${this.diceList.length}) or type "help": `);
+      if (input.toLowerCase() === 'help') {
+        this.showProbabilities();
         continue;
       }
-
-      if (index === this.diceList.length) {
-        const table = new ProbabilityTable(this.diceList).render();
-        this.cli.printHelp(table);
-        continue;
+      const i = parseInt(input, 10);
+      if (i >= 1 && i <= this.diceList.length) {
+        userIndex = i - 1;
+        break;
       }
-
-      if (index === this.diceList.length + 1) {
-        console.log('Goodbye!');
-        this.cli.close();
-        return;
-      }
-
-      userDice = this.diceList[index];
-      computerDice = this.diceList.find((_, i) => i !== index);
-      break;
+      console.log('Invalid input.');
     }
 
-    const userSeed = await this.cli.question('Enter your random seed (any string): ');
-    const computerSeed = HMACGenerator.generateKey();
+    const userDice = this.diceList[userIndex];
+    const computerDice = this.diceList.find((_, i) => i !== userIndex);
 
-    const userRollIndex = FairRandomGenerator.generate(userSeed, computerSeed, 6);
-    const computerRollIndex = FairRandomGenerator.generate(computerSeed, userSeed, 6);
+    const { value: compValue, secret, hmac } = FairRandomGenerator.commit(2);
 
-    const userRoll = userDice.roll(userRollIndex);
-    const computerRoll = computerDice.roll(computerRollIndex);
+    const input = await this.askValidNumber(`Enter random number (0-1): `, 0, 1);
 
-    console.log(`\nYou rolled: ${userRoll}`);
-    console.log(`Computer rolled: ${computerRoll}`);
+    const fairIndex = FairRandomGenerator.mix(parseInt(input), compValue, computerDice.faces.length);
 
-    if (userRoll > computerRoll) {
-      console.log('You win!');
-    } else if (userRoll < computerRoll) {
-      console.log('Computer wins!');
-    } else {
-      console.log('It\'s a draw!');
-    }
+    const userRoll = userDice.roll(0);
+    const compRoll = computerDice.roll(fairIndex);
+
+    console.log(`\nHMAC: ${hmac}`);
+    console.log(`Reveal: value = ${compValue}, secret = ${secret}`);
+
+    console.log(`You rolled: ${userRoll}`);
+    console.log(`Computer rolled: ${compRoll}`);
+
+    console.log(
+      userRoll > compRoll ? 'You won!' :
+      userRoll < compRoll ? 'Computer won!' :
+      'Draw!'
+    );
 
     this.cli.close();
+  }
+
+  async askValidNumber(prompt, min, max) {
+    while (true) {
+      const input = await this.cli.prompt(prompt);
+      const n = parseInt(input, 10);
+      if (n >= min && n <= max) return n;
+      console.log('Invalid number.');
+    }
+  }
+
+  showProbabilities() {
+    console.log('\n--- Dice Win Probability Table ---');
+    console.log(new ProbabilityTable(this.diceList).render());
   }
 }
