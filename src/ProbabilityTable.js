@@ -1,31 +1,49 @@
-import AsciiTable from 'ascii-table';
-import { ProbabilityCalculator } from './ProbabilityCalculator.js';
+import Table from 'cli-table3';
 
 export class ProbabilityTable {
   constructor(diceList) {
     this.diceList = diceList;
   }
 
-  render() {
-    const table = new AsciiTable('Win Probability Matrix');
+  calculateProbabilities() {
+    const n = this.diceList.length;
+    const table = Array.from({ length: n }, () => Array(n).fill('-'));
 
-    const headers = ['vs'].concat(this.diceList.map((_, i) => `D${i + 1}`));
-    table.setHeading(...headers);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i === j) continue;
 
-    this.diceList.forEach((diceA, i) => {
-      const row = [`D${i + 1}`];
+        let winCount = 0;
+        const dieA = this.diceList[i];
+        const dieB = this.diceList[j];
 
-      this.diceList.forEach((diceB, j) => {
-        if (i === j) {
-          row.push('-');
-        } else {
-          row.push(ProbabilityCalculator.getWinRate(diceA, diceB));
+        for (const faceA of dieA) {
+          for (const faceB of dieB) {
+            if (faceA > faceB) winCount++;
+          }
         }
-      });
 
-      table.addRow(...row);
-    });
+        const total = dieA.length * dieB.length;
+        const probability = (winCount / total) * 100;
+        table[i][j] = `${probability.toFixed(1)}%`;
+      }
+    }
 
-    return table.toString();
+    return table;
+  }
+
+  render() {
+    const headers = [''].concat(this.diceList.map((_, i) => `D${i + 1}`));
+    const table = new Table({ head: headers });
+
+    const probabilities = this.calculateProbabilities();
+
+    for (let i = 0; i < this.diceList.length; i++) {
+      const row = [`D${i + 1}`].concat(probabilities[i]);
+      table.push(row);
+    }
+
+    console.log('\nWin Probability Table:');
+    console.log(table.toString());
   }
 }

@@ -1,22 +1,33 @@
-import { Dice } from './Dice.js';
-
 export class DiceParser {
-  static parse(input) {
-    if (input.length < 3) throw new Error('At least 3 dice are required.');
-    if (input.length > 9) throw new Error('Too many dice (maximum is 9).');
+  static parse(args) {
+    if (args.length < 3) {
+      throw new Error(
+        "Invalid input: You must specify at least 3 dice.\n" +
+        "Example: node src/index.js 2,2,4,4,9,9 6,8,1,1,8,6 7,5,3,7,5,3"
+      );
+    }
 
-    return input.map((s, i) => {
-      const faces = s.split(',').map(n => {
-        const num = Number(n.trim());
-        if (!Number.isInteger(num)) throw new Error(`Invalid face in dice ${i + 1}: "${n}"`);
-        return num;
+    const dice = args.map((arg, index) => {
+      const parts = arg.split(',');
+      const faces = parts.map(num => {
+        const val = Number(num);
+        if (!Number.isInteger(val)) {
+          throw new Error(
+            `Invalid face in die #${index + 1}: "${num}" is not an integer.\n` +
+            "Example: 1,2,3,4,5,6"
+          );
+        }
+        return val;
       });
-
-      if (faces.length !== 6) {
-        throw new Error(`Dice ${i + 1} must have exactly 6 faces.`);
-      }
-
-      return new Dice(faces);
+      return faces;
     });
+
+    const faceCount = dice[0].length;
+    const allSameLength = dice.every(d => d.length === faceCount);
+    if (!allSameLength) {
+      throw new Error("Invalid input: All dice must have the same number of faces.");
+    }
+
+    return dice;
   }
 }

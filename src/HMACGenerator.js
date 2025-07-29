@@ -1,7 +1,16 @@
 import crypto from 'crypto';
 
 export class HMACGenerator {
-  static compute(message, key) {
-    return crypto.createHmac('sha3-256', key).update(String(message)).digest('hex');
+  static generate(secret, message) {
+    return crypto.createHmac('sha256', secret).update(message).digest('hex');
+  }
+
+  static verify(secret, message, hmac) {
+    const expected = this.generate(secret, message);
+    return expected === hmac;
+  }
+
+  static generateSecret(bytes = 32) {
+    return crypto.randomBytes(bytes).toString('hex');
   }
 }

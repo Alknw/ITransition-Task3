@@ -1,69 +1,81 @@
-import { FairRandomGenerator } from './FairRandomGenerator.js';
+import { CLI } from './CLI.js';
+import { FairRNG } from './FairRNG.js';
 import { ProbabilityTable } from './ProbabilityTable.js';
 
 export class Game {
-  constructor(diceList, cli) {
+  constructor(diceList) {
     this.diceList = diceList;
-    this.cli = cli;
   }
 
-  async run() {
-    this.cli.printWelcome();
-    this.cli.showDiceOptions(this.diceList);
+  start() {
+    CLI.print('\n--- Generalized Non-Transitive Dice Game ---');
 
-    let userIndex;
-    while (true) {
-      const input = await this.cli.prompt(`Select your die (1-${this.diceList.length}) or type "help": `);
-      if (input.toLowerCase() === 'help') {
-        this.showProbabilities();
-        continue;
-      }
-      const i = parseInt(input, 10);
-      if (i >= 1 && i <= this.diceList.length) {
-        userIndex = i - 1;
+    const tossRNG = new FairRNG([0, 1]);
+    const tossHMAC = tossRNG.prepareComputerCommit();
+    CLI.showCoinTossHMAC(tossHMAC);
+
+    const userCoinInput = CLI.promptUserNumber("Enter your number for coin toss (e.g. 0 or any integer):");
+    const tossResult = tossRNG.resolve(userCoinInput);
+    CLI.showCoinTossReveal(tossResult.secret, tossResult.computerNumber, tossResult.isVerified);
+
+    const userGoesFirst = (tossResult.value === 1);
+    CLI.print(userGoesFirst ? "\nYou won the coin toss. You choose your die first." : "\nComputer won the coin toss. It chooses first.");
+
+    let userDieIndex, computerDieIndex;
+
+    if (userGoesFirst) {
+      while (true) {
+        const choice = CLI.chooseDie(this.diceList);
+        if (choice === 'quit') return CLI.print("Game exited.");
+        if (choice === 'help') {
+          const pt = new ProbabilityTable(this.diceList);
+          pt.render();
+          continue;
+        }
+        userDieIndex = choice;
         break;
       }
-      console.log('Invalid input.');
+
+      const options = this.diceList.map((_, i) => i).filter(i => i !== userDieIndex);
+      computerDieIndex = options[Math.floor(Math.random() * options.length)];
+    } else {
+      computerDieIndex = Math.floor(Math.random() * this.diceList.length);
+      while (true) {
+        const choice = CLI.chooseDie(this.diceList, computerDieIndex);
+        if (choice === 'quit') return CLI.print("Game exited.");
+        if (choice === 'help') {
+          const pt = new ProbabilityTable(this.diceList);
+          pt.render();
+          continue;
+        }
+        userDieIndex = choice;
+        break;
+      }
     }
 
-    const userDice = this.diceList[userIndex];
-    const computerDice = this.diceList.find((_, i) => i !== userIndex);
+    CLI.print(`\nYour die: [${this.diceList[userDieIndex].join(', ')}]`);
+    CLI.print(`Computer die: [${this.diceList[computerDieIndex].join(', ')}]`);
 
-    const { value: compValue, secret, hmac } = FairRandomGenerator.commit(2);
+    const userRollRNG = new FairRNG(this.diceList[userDieIndex]);
+    const userRollHMAC = userRollRNG.prepareComputerCommit();
+    CLI.print(`\nComputer committed to your roll using HMAC: ${userRollHMAC}`);
+    const userInputRoll = CLI.promptUserNumber("Enter your number for your roll:");
+    const userRoll = userRollRNG.resolve(userInputRoll);
+    CLI.showRollResult("Your", userRoll);
 
-    const input = await this.askValidNumber(`Enter random number (0-1): `, 0, 1);
+    const cpuRollRNG = new FairRNG(this.diceList[computerDieIndex]);
+    const cpuRollHMAC = cpuRollRNG.prepareComputerCommit();
+    CLI.print(`\nComputer committed to its own roll using HMAC: ${cpuRollHMAC}`);
+    const userInputForCPU = CLI.promptUserNumber("Enter your number to generate computer's roll:");
+    const cpuRoll = cpuRollRNG.resolve(userInputForCPU);
+    CLI.showRollResult("Computer", cpuRoll);
 
-    const fairIndex = FairRandomGenerator.mix(parseInt(input), compValue, computerDice.faces.length);
-
-    const userRoll = userDice.roll(0);
-    const compRoll = computerDice.roll(fairIndex);
-
-    console.log(`\nHMAC: ${hmac}`);
-    console.log(`Reveal: value = ${compValue}, secret = ${secret}`);
-
-    console.log(`You rolled: ${userRoll}`);
-    console.log(`Computer rolled: ${compRoll}`);
-
-    console.log(
-      userRoll > compRoll ? 'You won!' :
-      userRoll < compRoll ? 'Computer won!' :
-      'Draw!'
-    );
-
-    this.cli.close();
-  }
-
-  async askValidNumber(prompt, min, max) {
-    while (true) {
-      const input = await this.cli.prompt(prompt);
-      const n = parseInt(input, 10);
-      if (n >= min && n <= max) return n;
-      console.log('Invalid number.');
+    if (userRoll.value > cpuRoll.value) {
+      CLI.print("\nYou win!");
+    } else if (userRoll.value < cpuRoll.value) {
+      CLI.print("\nComputer wins.");
+    } else {
+      CLI.print("\nIt's a draw.");
     }
-  }
-
-  showProbabilities() {
-    console.log('\n--- Dice Win Probability Table ---');
-    console.log(new ProbabilityTable(this.diceList).render());
   }
 }
