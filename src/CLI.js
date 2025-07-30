@@ -1,74 +1,94 @@
+// src/CLI.js
 import readlineSync from 'readline-sync';
+import Table from 'ascii-table';
 
 export class CLI {
-  static promptUserNumber(label = 'Enter a number:') {
+  showHMAC(hmac) {
+    console.log(`HMAC: ${hmac}`);
+  }
+
+  askBinaryChoice() {
     while (true) {
-      const input = readlineSync.question(`${label} `);
+      const input = readlineSync.question('Enter your choice (0 or 1), X to exit, ? for help: ').trim();
+      if (['0', '1', 'X', '?'].includes(input.toUpperCase())) return input.toUpperCase();
+      console.log('Invalid input. Enter 0, 1, X or ?');
+    }
+  }
+
+  showSecret(secret) {
+    console.log(`Secret key: ${secret}`);
+  }
+
+  showCoinTossResult(userChoice, computerChoice, winner) {
+    console.log(`You chose ${userChoice}, computer chose ${computerChoice}`);
+    console.log(`${winner === 'user' ? 'You' : 'Computer'} go first.`);
+  }
+
+  showDiceList(diceList) {
+    console.log('\nAvailable dice:');
+    diceList.forEach((dice, index) => {
+      console.log(`[${index}] ${JSON.stringify(dice)}`);
+    });
+  }
+
+  askDiceSelection(prompt, validIndexes) {
+    while (true) {
+      const input = readlineSync.question(prompt).trim().toUpperCase();
+      if (input === 'X' || input === '?') return input;
       const num = Number(input);
-
-      if (Number.isInteger(num) && num >= 0) {
-        return num;
-      }
-
-      console.log("Invalid input. Please enter a non-negative integer.");
+      if (!Number.isNaN(num) && validIndexes.includes(num)) return num;
+      console.log('Invalid input.');
     }
   }
 
-  static chooseDie(diceList, excludeIndex = null) {
+  showComputerDiceSelection(index, dice) {
+    console.log(`Computer selected die [${index}]: ${JSON.stringify(dice)}`);
+  }
+
+  showHMACCommitment(hmac) {
+    console.log(`\nHMAC of computer's number: ${hmac}`);
+    console.log('Add your number modulo 6.');
+    console.log('0 - 0\n1 - 1\n2 - 2\n3 - 3\n4 - 4\n5 - 5\nX - exit\n? - help');
+  }
+
+  askUserNumberForRoll() {
     while (true) {
-      console.log('\nAvailable dice:');
-      diceList.forEach((die, index) => {
-        const note = index === excludeIndex ? ' (taken)' : '';
-        console.log(`${index + 1}: [${die.join(', ')}]${note}`);
-      });
-      console.log('H: Help');
-      console.log('Q: Quit');
-
-      const input = readlineSync.question('Choose a die: ').trim().toUpperCase();
-
-      if (input === 'H') {
-        return 'help';
-      }
-
-      if (input === 'Q') {
-        return 'quit';
-      }
-
-      const idx = parseInt(input, 10);
-      if (Number.isInteger(idx) && idx >= 1 && idx <= diceList.length) {
-        if (idx - 1 === excludeIndex) {
-          console.log("This die is already taken. Choose another.");
-        } else {
-          return idx - 1;
-        }
-      } else {
-        console.log("Invalid input. Try again.");
-      }
+      const input = readlineSync.question('Your selection: ').trim().toUpperCase();
+      if (['0','1','2','3','4','5','X','?'].includes(input)) return input;
+      console.log('Invalid input.');
     }
   }
 
-  static showCoinTossHMAC(hmac) {
-    console.log(`\nCoin toss:`);
-    console.log(`Computer has committed to a bit using HMAC: ${hmac}`);
+  showReveal(secret, computerNumber, userNumber, resultIndex) {
+    console.log(`My number is ${computerNumber} (KEY=${secret}).`);
+    console.log(`The fair number generation result is ${computerNumber} + ${userNumber} = ${resultIndex} (mod 6).`);
   }
 
-  static showCoinTossReveal(secret, number, verified) {
-    console.log(`\nReveal:`);
-    console.log(`Computer's bit: ${number}`);
-    console.log(`Secret: ${secret}`);
-    console.log(`HMAC valid: ${verified ? 'YES' : 'NO'}`);
+  showRollResult(owner, value) {
+    console.log(`${owner} roll result is ${value}.`);
   }
 
-  static showRollResult(playerName, { value, computerNumber, secret, hmac, isVerified }) {
-    console.log(`\n${playerName} roll result:`);
-    console.log(`  Final value: ${value}`);
-    console.log(`  Computer number: ${computerNumber}`);
-    console.log(`  Secret: ${secret}`);
-    console.log(`  HMAC: ${hmac}`);
-    console.log(`  HMAC valid: ${isVerified ? 'YES' : 'NO'}`);
-}
+  showWinner(winner, userRoll, computerRoll) {
+    if (userRoll > computerRoll) {
+      console.log('You win (' + userRoll + ' > ' + computerRoll + ')!');
+    } else if (userRoll < computerRoll) {
+      console.log('Computer wins (' + computerRoll + ' > ' + userRoll + ').');
+    } else {
+      console.log(`It's a draw (${userRoll} = ${computerRoll})!`);
+    }
+  }
 
-  static print(text) {
-    console.log(text);
+  showProbabilityTable(probTable) {
+    const table = new Table('Dice Win Rates');
+    table.setHeading('', ...probTable.map((_, i) => `D${i}`));
+    probTable.forEach((row, i) => {
+      table.addRow(`D${i}`, ...row.map(p => `${(p * 100).toFixed(1)}%`));
+    });
+    console.log(table.toString());
+  }
+
+  exit() {
+    console.log('Exiting...');
+    process.exit(0);
   }
 }

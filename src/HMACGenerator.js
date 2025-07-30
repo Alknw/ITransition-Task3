@@ -1,8 +1,8 @@
-import crypto from 'crypto';
+import { randomBytes, createHmac } from 'node:crypto';
 
 export class HMACGenerator {
   static generate(secret, message) {
-    return crypto.createHmac('sha256', secret).update(message).digest('hex');
+    return createHmac('sha256', secret).update(message).digest('hex');
   }
 
   static verify(secret, message, hmac) {
@@ -11,6 +11,6 @@ export class HMACGenerator {
   }
 
   static generateSecret(bytes = 32) {
-    return crypto.randomBytes(bytes).toString('hex');
+    return randomBytes(bytes).toString('hex');
   }
 }

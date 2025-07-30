@@ -1,33 +1,20 @@
+import { randomBytes } from 'node:crypto';
 import { HMACGenerator } from './HMACGenerator.js';
 
 export class FairRNG {
-  constructor(possibleValues) {
-    this.values = possibleValues;
-    this.mod = possibleValues.length;
+  getRandomNumber(range) {
+    const byte = randomBytes(1)[0];
+    return byte % range;
   }
 
-  prepareComputerCommit() {
-    this.computerNumber = Math.floor(Math.random() * this.mod);
-    this.secret = HMACGenerator.generateSecret();
-    this.hmac = HMACGenerator.generate(this.secret, this.computerNumber.toString());
-    return this.hmac;
+  getHMAC(range = 6) {
+    const number = this.getRandomNumber(range);
+    const key = HMACGenerator.generateSecret(16);
+    const hmac = HMACGenerator.generate(key, number.toString());
+    return { number, key, hmac };
   }
 
-  resolve(userNumber) {
-    if (typeof userNumber !== 'number' || userNumber < 0 || !Number.isInteger(userNumber)) {
-      throw new Error('Invalid user input: must be a non-negative integer.');
-    }
-
-    const finalIndex = (this.computerNumber + userNumber) % this.mod;
-    const value = this.values[finalIndex];
-
-    return {
-      value,
-      index: finalIndex,
-      computerNumber: this.computerNumber,
-      secret: this.secret,
-      hmac: this.hmac,
-      isVerified: HMACGenerator.verify(this.secret, this.computerNumber.toString(), this.hmac)
-    };
+  getFairIndex(userNum, compNum, modulo) {
+    return (userNum + compNum) % modulo;
   }
 }
