@@ -1,101 +1,114 @@
 import readlineSync from 'readline-sync';
 import { FairRNG } from './FairRNG.js';
 import { ProbabilityTable } from './ProbabilityTable.js';
+import crypto from 'node:crypto';
 
 export class Game {
   constructor(diceList) {
     this.diceList = diceList;
-    this.rng = new FairRNG();
     this.table = new ProbabilityTable(diceList);
   }
 
   start() {
-    console.log("Let’s flip a coin to decide who goes first.");
-    const toss = this.rng.getHMAC();
-    console.log(`HMAC: ${toss.hmac}`);
+    console.log("Let's flip a coin to decide who goes first.");
 
-    const input = readlineSync.question('Your call (0 or 1): ');
-    if (input.toLowerCase() === 'exit') return;
-    if (!['0', '1'].includes(input)) {
-      console.log('Invalid input. Exiting.');
+    const toss = FairRNG.generateCoinTossHMAC();
+    console.log(`HMAC: ${toss.hmac}`);
+    const input = readlineSync.question('Guess (0 or 1): ').trim().toLowerCase();
+
+    if (input === 'x') return;
+    if (input === '?') {
+      console.log('This is a fair coin toss. You must guess 0 or 1.\n');
+      console.log(`HMAC: ${toss.hmac}`);
+      console.log(`(HMAC is generated from computerBit = ${toss.computerBit} and secret key = ${toss.key})`);
       return;
     }
 
-    const userNum = parseInt(input);
-    console.log(`Computer's number: ${toss.number % 2}`);
-    console.log(`Key: ${toss.key}`);
-
-    const result = this.rng.getFairIndex(userNum, toss.number % 2, 2);
-    const userGoesFirst = result === 0;
-    console.log(userGoesFirst ? 'You go first.' : 'Computer goes first.');
-
-    let userDieIndex, compDieIndex;
-
-    if (userGoesFirst) {
-      userDieIndex = this.askUserToPickDie(this.diceList);
-      compDieIndex = this.pickComputerDie(userDieIndex);
-    } else {
-      compDieIndex = this.pickComputerDie();
-      const compDie = this.diceList[compDieIndex];
-      console.log(`Computer picked die #${compDieIndex}: [${compDie.join(', ')}]`);
-      userDieIndex = this.askUserToPickDie(this.diceList.filter((_, i) => i !== compDieIndex), compDieIndex);
+    const userCall = parseInt(input);
+    if (![0, 1].includes(userCall)) {
+      console.log('Invalid input. Enter 0 or 1.');
+      return;
     }
 
-    const compRoll = this.performRoll(compDieIndex, 'Computer');
-    const userRoll = this.performRoll(userDieIndex, 'You');
+    const { index: tossResult, proof } = FairRNG.generateFairIndex(toss.computerBit, userCall, 2);
+    const userGoesFirst = tossResult === 0;
 
-    console.log(`\nComputer rolled: ${compRoll}`);
-    console.log(`You rolled: ${userRoll}`);
+    console.log(`Key: ${toss.key}`);
+    console.log(`Computer's bit: ${toss.computerBit}`);
+    console.log(`Your call: ${userCall}`);
+    console.log(`Fair result: ${proof.formula} → ${userGoesFirst ? 'You go first.' : 'Computer goes first.'}\n`);
 
-    if (userRoll > compRoll) console.log('You win!');
-    else if (userRoll < compRoll) console.log('Computer wins.');
-    else console.log('It\'s a draw.');
+    let userDieIndex, computerDieIndex;
+
+    if (userGoesFirst) {
+      userDieIndex = this.pickDie();
+      if (userDieIndex === null) return;
+      const remainingDice = this.diceList.filter((_, i) => i !== userDieIndex);
+      computerDieIndex = this.pickRandomIndex(remainingDice.length);
+      if (computerDieIndex >= userDieIndex) computerDieIndex++;
+      console.log(`Computer picks die #${computerDieIndex}`);
+    } else {
+      computerDieIndex = this.pickRandomIndex(this.diceList.length);
+      console.log(`Computer picks die #${computerDieIndex}`);
+      const remainingDice = this.diceList.filter((_, i) => i !== computerDieIndex);
+      userDieIndex = this.pickDie(remainingDice, computerDieIndex);
+      if (userDieIndex === null) return;
+    }
+
+    const userRoll = this.performRoll(this.diceList[userDieIndex], 'Your');
+    const computerRoll = this.performRoll(this.diceList[computerDieIndex], 'Computer');
+
+    if (userRoll.value > computerRoll.value) {
+      console.log('You win!');
+    } else if (userRoll.value < computerRoll.value) {
+      console.log('Computer wins!');
+    } else {
+      console.log('It\'s a draw!');
+    }
   }
 
-  askUserToPickDie(options, excludedIndex = null) {
-    console.log('\nAvailable dice:');
-    options.forEach((die, i) => {
-      const originalIndex = excludedIndex !== null && i >= excludedIndex ? i + 1 : i;
-      console.log(` ${originalIndex}: [${die.join(', ')}]`);
+  pickDie(dice = this.diceList, offsetIndex = null) {
+    console.log('Available dice:');
+    dice.forEach((die, i) => {
+      const index = offsetIndex !== null && i >= offsetIndex ? i + 1 : i;
+      console.log(`  ${index}: [${die.join(', ')}]`);
     });
 
     while (true) {
-      const input = readlineSync.question('Pick a die by number, "?" for help, or "exit": ');
-      if (input === 'exit') process.exit();
+      const input = readlineSync.question('Choose a die by number (? for help, x to exit): ').trim().toLowerCase();
       if (input === '?') {
-        this.table.render();
+        this.table.print();
         continue;
       }
-      const num = parseInt(input);
-      const validIndices = options.map((_, i) => excludedIndex !== null && i >= excludedIndex ? i + 1 : i);
-      if (!isNaN(num) && validIndices.includes(num)) return num;
-      console.log('Invalid selection.');
+      if (input === 'x') return null;
+
+      const choice = parseInt(input);
+      if (!isNaN(choice) && this.diceList[choice] && choice !== offsetIndex) {
+        return choice;
+      }
+      console.log('Invalid choice.');
     }
   }
 
-  pickComputerDie(excludeIdx = null) {
-    const availableIndices = this.diceList.map((_, i) => i).filter(i => i !== excludeIdx);
-    const hmac = this.rng.getHMAC();
-    const choiceIndex = hmac.number % availableIndices.length;
-    return availableIndices[choiceIndex];
+  performRoll(die, label) {
+    console.log(`${label} roll:`);
+
+    const hmacSeed = crypto.randomInt(0, 6);
+    const userInput = readlineSync.questionInt('Enter a number (from 0 to 5) to participate in fair roll: ');
+    const { index, proof } = FairRNG.generateFairIndex(userInput, hmacSeed, 6);
+    const value = die[index];
+
+    console.log(`  Your input: ${userInput}`);
+    console.log(`  Computer number: ${hmacSeed}`);
+    console.log(`  HMAC key: ${proof.key}`);
+    console.log(`  HMAC: ${proof.hmac}`);
+    console.log(`  Result formula: ${proof.formula}`);
+    console.log(`  Rolled index: ${index}, value: ${value}\n`);
+
+    return { index, value };
   }
 
-  performRoll(dieIndex, label) {
-    const hmac = this.rng.getHMAC();
-    console.log(`\n${label} HMAC: ${hmac.hmac}`);
-
-    const input = readlineSync.question(`${label}, enter a number (0-5) or "exit": `);
-    if (input.toLowerCase() === 'exit') process.exit();
-
-    const userNum = parseInt(input);
-    if (isNaN(userNum) || userNum < 0 || userNum > 5) {
-      console.log('Invalid number. Exiting.');
-      process.exit();
-    }
-
-    const finalIndex = this.rng.getFairIndex(userNum, hmac.number % 6, 6);
-    console.log(`${label} key: ${hmac.key}`);
-    console.log(`(${userNum} + ${hmac.number % 6}) % 6 = ${finalIndex}`);
-    return this.diceList[dieIndex][finalIndex];
+  pickRandomIndex(length) {
+    return crypto.randomInt(0, length);
   }
 }
