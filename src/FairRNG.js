@@ -1,20 +1,36 @@
-import { randomBytes } from 'node:crypto';
-import { HMACGenerator } from './HMACGenerator.js';
+import crypto from 'crypto';
 
 export class FairRNG {
-  getRandomNumber(range) {
-    const byte = randomBytes(1)[0];
-    return byte % range;
+  static generateFairIndex(computerNumber, userInput, range = 6) {
+    if (typeof range !== 'number' || range <= 0) {
+      throw new Error(`Invalid range: ${range}. Must be greater than 0.`);
+    }
+
+    const key = crypto.randomBytes(32).toString('hex');
+    const hmac = crypto.createHmac('sha256', key).update(String(computerNumber)).digest('hex');
+    const index = (userInput + computerNumber) % range;
+
+    return {
+      index,
+      proof: {
+        hmac,
+        key,
+        computerNumber,
+        userInput,
+        formula: `(${userInput} + ${computerNumber}) % ${range} = ${index}`
+      }
+    };
   }
 
-  getHMAC(range = 6) {
-    const number = this.getRandomNumber(range);
-    const key = HMACGenerator.generateSecret(16);
-    const hmac = HMACGenerator.generate(key, number.toString());
-    return { number, key, hmac };
-  }
+  static generateCoinTossHMAC() {
+    const computerBit = crypto.randomInt(0, 2);
+    const key = crypto.randomBytes(32).toString('hex');
+    const hmac = crypto.createHmac('sha256', key).update(String(computerBit)).digest('hex');
 
-  getFairIndex(userNum, compNum, modulo) {
-    return (userNum + compNum) % modulo;
+    return {
+      computerBit,
+      hmac,
+      key
+    };
   }
 }
